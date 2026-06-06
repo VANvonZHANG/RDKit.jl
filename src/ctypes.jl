@@ -1,5 +1,5 @@
 # src/ctypes.jl
-# AUTO-GENERATED from cffiwrapper.h — DO NOT EDIT MANUALLY
+# Hand-written from cffiwrapper.h — DO NOT EDIT MANUALLY
 # Layer 1: Raw ccall bindings for RDKit CFFI
 
 const librdkitcffi = RDKit_jll.librdkitcffi
