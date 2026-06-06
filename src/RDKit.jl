@@ -24,12 +24,14 @@ export get_mol_frags
 export get_morgan_fp, get_rdkit_fp, get_pattern_fp, get_atom_pair_fp, get_topological_torsion_fp, get_maccs_fp
 export get_morgan_fp_as_bytes, get_rdkit_fp_as_bytes, get_pattern_fp_as_bytes, get_atom_pair_fp_as_bytes, get_topological_torsion_fp_as_bytes, get_maccs_fp_as_bytes
 export get_descriptors
-# include("drawing.jl")
+export get_svg, get_rxn_svg
+export get_substruct_match, get_substruct_matches
+include("drawing.jl")
 include("calculators.jl")
 # include("standardization.jl")
 # include("coordinates.jl")
 # include("modification.jl")
-# include("substructure.jl")
+include("substructure.jl")
 # include("properties.jl")
 # include("png.jl")
 # include("chirality.jl")
