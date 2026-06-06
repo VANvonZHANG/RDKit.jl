@@ -1,6 +1,6 @@
 using Test
+using RDKit
 
 @testset "RDKit.jl" begin
-    # Placeholder — tests will be added as modules are implemented
-    @test true
+    include("test_io.jl")
 end

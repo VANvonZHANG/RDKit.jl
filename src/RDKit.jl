@@ -11,7 +11,16 @@ include("types.jl")
 include("api.jl")
 
 # Layer 3: High-level Julia API
-# include("io.jl")
+include("io.jl")
+
+# Exports
+export Mol, Reaction
+export get_mol, get_qmol, get_rxn
+export get_smiles, get_smarts, get_cxsmiles, get_cxsmarts
+export get_molblock, get_v3kmolblock, get_v2kmolblock
+export get_json, get_inchi
+export get_inchi_for_molblock, get_inchikey_for_inchi
+export get_mol_frags
 # include("drawing.jl")
 # include("calculators.jl")
 # include("standardization.jl")

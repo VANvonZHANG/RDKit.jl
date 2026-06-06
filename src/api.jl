@@ -38,7 +38,7 @@ Pattern: jsonify_details → ccall → unsafe_string_and_free
 macro ccall_string(func_name, mol, details)
     quote
         local details_json = jsonify_details($(esc(details)))
-        local val = ccall(($(QuoteNode(func_name)), librdkitcffi), Cstring,
+        local val = ccall(($(esc(func_name)), librdkitcffi), Cstring,
                           (Cstring, Csize_t, Cstring),
                           $(esc(mol)).pkl[], $(esc(mol)).pkl_size[], details_json)
         unsafe_string_and_free(val)
@@ -55,7 +55,7 @@ macro ccall_bytes(func_name, mol, details)
     quote
         local details_json = jsonify_details($(esc(details)))
         local n_bytes = Ref{Csize_t}(0)
-        local val = ccall(($(QuoteNode(func_name)), librdkitcffi), Cstring,
+        local val = ccall(($(esc(func_name)), librdkitcffi), Cstring,
                           (Cstring, Csize_t, Ref{Csize_t}, Cstring),
                           $(esc(mol)).pkl[], $(esc(mol)).pkl_size[], n_bytes, details_json)
         Vector{UInt8}(unsafe_string_and_free(val, n_bytes))
@@ -71,7 +71,7 @@ Pattern: jsonify_details → ccall with Ref params → no return value
 macro ccall_mutate!(func_name, mol, details)
     quote
         local details_json = jsonify_details($(esc(details)))
-        ccall(($(QuoteNode(func_name)), librdkitcffi), Cvoid,
+        ccall(($(esc(func_name)), librdkitcffi), Cvoid,
               (Ref{Cstring}, Ref{Csize_t}, Cstring),
               $(esc(mol)).pkl, $(esc(mol)).pkl_size, details_json)
     end
