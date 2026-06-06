@@ -7,8 +7,8 @@ using JSON
 include("ctypes.jl")
 
 # Layer 2: Core types and API macros
-# include("types.jl")
-# include("api.jl")
+include("types.jl")
+include("api.jl")
 
 # Layer 3: High-level Julia API
 # include("io.jl")
