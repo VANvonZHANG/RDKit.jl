@@ -29,15 +29,21 @@ export get_substruct_match, get_substruct_matches
 export cleanup, normalize, neutralize, reionize, canonical_tautomer, charge_parent, fragment_parent
 export add_hs, remove_all_hs, remove_hs
 export prefer_coordgen, has_coords, set_2d_coords, set_3d_coords, set_2d_coords_aligned
+export has_prop, get_prop, get_prop_list, set_prop!, clear_prop!, keep_props
+export add_mol_to_png_blob, get_mol_from_png_blob, get_mols_from_png_blob
+export use_legacy_stereo_perception, allow_non_tetrahedral_chirality
+export enable_logging, disable_logging, enable_logger, disable_logger
+export set_log_tee, set_log_capture, get_log_buffer, clear_log_buffer, destroy_log_handle
+export version
 include("drawing.jl")
 include("calculators.jl")
 include("standardization.jl")
 include("coordinates.jl")
 include("modification.jl")
 include("substructure.jl")
-# include("properties.jl")
-# include("png.jl")
-# include("chirality.jl")
-# include("logging.jl")
+include("properties.jl")
+include("png.jl")
+include("chirality.jl")
+include("logging.jl")
 
 end # module

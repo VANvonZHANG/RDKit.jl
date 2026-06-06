@@ -316,21 +316,14 @@ function free_ptr(ptr::Cstring)
     @ccall librdkitcffi.free_ptr(ptr::Cstring)::Cvoid
 end
 
-function version()
-    @ccall librdkitcffi.version()::Cstring
-end
-
-function enable_logging()
-    @ccall librdkitcffi.enable_logging()::Cshort
-end
+# version() — moved to logging.jl (Layer 3)
+# enable_logging() — moved to logging.jl (Layer 3)
 
 function enable_logger(log_name::Cstring)
     @ccall librdkitcffi.enable_logger(log_name::Cstring)::Cshort
 end
 
-function disable_logging()
-    @ccall librdkitcffi.disable_logging()::Cshort
-end
+# disable_logging() — moved to logging.jl (Layer 3)
 
 function disable_logger(log_name::Cstring)
     @ccall librdkitcffi.disable_logger(log_name::Cstring)::Cshort
@@ -404,13 +397,8 @@ function destroy_log_handle(log_handle::Ref{Ptr{Cvoid}})
     @ccall librdkitcffi.destroy_log_handle(log_handle::Ref{Ptr{Cvoid}})::Cshort
 end
 
-function get_log_buffer(log_handle::Ptr{Cvoid})
-    @ccall librdkitcffi.get_log_buffer(log_handle::Ptr{Cvoid})::Cstring
-end
-
-function clear_log_buffer(log_handle::Ptr{Cvoid})
-    @ccall librdkitcffi.clear_log_buffer(log_handle::Ptr{Cvoid})::Cshort
-end
+# get_log_buffer() — moved to logging.jl (Layer 3)
+# clear_log_buffer() — moved to logging.jl (Layer 3)
 
 # ---------------------------------------------------------------------------
 # Properties
