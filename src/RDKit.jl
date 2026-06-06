@@ -21,8 +21,11 @@ export get_molblock, get_v3kmolblock, get_v2kmolblock
 export get_json, get_inchi
 export get_inchi_for_molblock, get_inchikey_for_inchi
 export get_mol_frags
+export get_morgan_fp, get_rdkit_fp, get_pattern_fp, get_atom_pair_fp, get_topological_torsion_fp, get_maccs_fp
+export get_morgan_fp_as_bytes, get_rdkit_fp_as_bytes, get_pattern_fp_as_bytes, get_atom_pair_fp_as_bytes, get_topological_torsion_fp_as_bytes, get_maccs_fp_as_bytes
+export get_descriptors
 # include("drawing.jl")
-# include("calculators.jl")
+include("calculators.jl")
 # include("standardization.jl")
 # include("coordinates.jl")
 # include("modification.jl")
