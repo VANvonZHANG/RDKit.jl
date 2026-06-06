@@ -6,4 +6,7 @@ using RDKit
     include("test_calculators.jl")
     include("test_drawing.jl")
     include("test_substructure.jl")
+    include("test_standardization.jl")
+    include("test_modification.jl")
+    include("test_coordinates.jl")
 end

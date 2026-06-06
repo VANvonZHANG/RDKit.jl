@@ -26,11 +26,14 @@ export get_morgan_fp_as_bytes, get_rdkit_fp_as_bytes, get_pattern_fp_as_bytes, g
 export get_descriptors
 export get_svg, get_rxn_svg
 export get_substruct_match, get_substruct_matches
+export cleanup, normalize, neutralize, reionize, canonical_tautomer, charge_parent, fragment_parent
+export add_hs, remove_all_hs, remove_hs
+export prefer_coordgen, has_coords, set_2d_coords, set_3d_coords, set_2d_coords_aligned
 include("drawing.jl")
 include("calculators.jl")
-# include("standardization.jl")
-# include("coordinates.jl")
-# include("modification.jl")
+include("standardization.jl")
+include("coordinates.jl")
+include("modification.jl")
 include("substructure.jl")
 # include("properties.jl")
 # include("png.jl")
