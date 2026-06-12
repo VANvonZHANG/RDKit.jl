@@ -3,6 +3,23 @@ module RDKit
 using RDKit_jll
 using JSON
 
+# CxxWrap backend — direct C++ object access (requires libjlRDKit.so)
+# Falls back gracefully if library not available (CFFI still works)
+using Libdl
+const _cxx_available = Ref(false)
+
+function _try_init_cxx()
+    try
+        include("cxx_backend.jl")
+        # If we get here, the Cxx submodule loaded successfully
+        _cxx_available[] = true
+        return true
+    catch e
+        @debug "CxxWrap backend not available" exception = (e, catch_backtrace())
+        return false
+    end
+end
+
 # Layer 1: Raw ccall bindings for RDKit CFFI
 include("ctypes.jl")
 
@@ -59,5 +76,9 @@ export # Types
        enable_logging, disable_logging, enable_logger, disable_logger,
        set_log_tee, set_log_capture, get_log_buffer, clear_log_buffer, destroy_log_handle,
        version
+
+function __init__()
+    _try_init_cxx()
+end
 
 end # module
