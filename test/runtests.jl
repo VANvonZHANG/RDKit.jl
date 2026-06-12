@@ -13,4 +13,7 @@ using RDKit
     include("test_png.jl")
     include("test_chirality.jl")
     include("test_logging.jl")
+
+    # CxxWrap backend tests — skipped if JLRDKIT_LIB_PATH not set
+    include("test_cxxwrap.jl")
 end
