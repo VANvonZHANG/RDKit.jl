@@ -7,10 +7,11 @@ using JSON
 # Falls back gracefully if library not available (CFFI still works)
 using Libdl
 const _cxx_available = Ref(false)
+const _srcdir = @__DIR__
 
 function _try_init_cxx()
     try
-        include("cxx_backend.jl")
+        include(joinpath(_srcdir, "cxx_backend.jl"))
         # If we get here, the Cxx submodule loaded successfully
         _cxx_available[] = true
         return true
