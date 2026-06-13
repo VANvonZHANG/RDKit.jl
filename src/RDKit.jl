@@ -1,85 +1,195 @@
 module RDKit
 
-using RDKit_jll
-using JSON
+using CxxWrap
+using CxxWrap.StdLib: SharedPtrAllocated
+import RDKit_jll
+import Libdl
 
-# CxxWrap backend — direct C++ object access (requires libjlRDKit.so)
-# Falls back gracefully if library not available (CFFI still works)
-using Libdl
-const _cxx_available = Ref(false)
-const _srcdir = @__DIR__
+# ------------------------------------------------------------
+# Set up the dynamic loader path BEFORE the Cxx submodule loads
+# libjlRDKit.so.
+#
+# libjlRDKit.so links the RDKit_jll shared libraries directly, but those
+# libraries (whose own RUNPATH is $ORIGIN) cannot resolve their boost
+# dependencies (libboost_serialization.so etc., which live in a separate
+# artifact dir). The fix is two-pronged:
+#   1. Push the RDKit, JlCxx and boost lib dirs onto Base.DL_LOAD_PATH so
+#      the loader can find every NEEDED library.
+#   2. dlopen the boost libs (and the RDKit libs that pull them in) with
+#      RTLD_GLOBAL so their symbols are available globally and the RDKit
+#      libs' own NEEDED entries resolve at dlopen time.
+#
+# With this in place `using RDKit` works WITHOUT an externally-set
+# LD_LIBRARY_PATH. If anything goes wrong (RDKit_jll unavailable, artifacts
+# moved) we fall back gracefully and rely on JLRDKIT_LIB_PATH + external
+# LD_LIBRARY_PATH.
+# ------------------------------------------------------------
 
-function _try_init_cxx()
+"""Locate the boost artifact dir by scanning the Julia artifacts root for a
+`lib/libboost_serialization.so` file. Returns the boost lib dir or `nothing`."""
+function _find_boost_libdir()
+    artifacts_root = dirname(RDKit_jll.artifact_dir)
+    isdir(artifacts_root) || return nothing
+    for d in readdir(artifacts_root)
+        cand = joinpath(artifacts_root, d, "lib", "libboost_serialization.so")
+        isfile(cand) && return joinpath(artifacts_root, d, "lib")
+    end
+    return nothing
+end
+
+# Boost libraries that the RDKit_jll .so files list as NEEDED but cannot
+# resolve on their own (their RUNPATH is $ORIGIN). Preloading these with
+# RTLD_GLOBAL makes their symbols globally visible so the transitive link
+# succeeds.
+const _BOOST_PRELOAD = (
+    "libboost_serialization.so",
+    "libboost_iostreams.so",
+    "libboost_random.so",
+    "libboost_regex.so",
+    "libboost_system.so",
+)
+
+# RDKit libraries that transitively pull boost in; preloading them with
+# RTLD_GLOBAL (after boost) resolves the rest of the dependency graph.
+const _RDKIT_PRELOAD = (
+    "libRDKitGraphMol.so",
+    "libRDKitFileParsers.so",
+    "libRDKitSmilesParse.so",
+    "libRDKitFingerprints.so",
+    "libRDKitMolDraw2D.so",
+)
+
+"""Push a directory onto `Base.DL_LOAD_PATH` (idempotent, at the front)."""
+function _push_load_path!(dir::AbstractString)
+    isempty(dir) && return
+    d = String(dir)
+    d ∉ Base.DL_LOAD_PATH && pushfirst!(Base.DL_LOAD_PATH, d)
+    return nothing
+end
+
+"""Preload a .so with RTLD_GLOBAL, ignoring failures (best-effort)."""
+function _preload!(libpath::AbstractString)
     try
-        include(joinpath(_srcdir, "cxx_backend.jl"))
-        # If we get here, the Cxx submodule loaded successfully
-        _cxx_available[] = true
-        return true
-    catch e
-        @debug "CxxWrap backend not available" exception = (e, catch_backtrace())
-        return false
+        Libdl.dlopen(libpath, Libdl.RTLD_GLOBAL)
+    catch err
+        @warn "Could not preload library" lib=libpath exception=err
+    end
+    return nothing
+end
+
+function _setup_load_path!()
+    try
+        # RDKit + JlCxx dirs.
+        _push_load_path!(joinpath(RDKit_jll.artifact_dir, "lib"))
+        _push_load_path!(joinpath(CxxWrap.prefix_path(), "lib"))
+
+        # Boost dir + global preload of the boost libs the RDKit .so files
+        # transitively need.
+        boost_dir = _find_boost_libdir()
+        if boost_dir !== nothing
+            _push_load_path!(boost_dir)
+            for lib in _BOOST_PRELOAD
+                _preload!(joinpath(boost_dir, lib))
+            end
+        end
+
+        # Preload the key RDKit libs globally so their own NEEDED entries
+        # resolve against the now-global boost symbols.
+        rdkit_libdir = joinpath(RDKit_jll.artifact_dir, "lib")
+        for lib in _RDKIT_PRELOAD
+            _preload!(joinpath(rdkit_libdir, lib))
+        end
+    catch err
+        @warn "Could not fully set up RDKit load path" exception=err
+    end
+    return nothing
+end
+
+_setup_load_path!()
+
+# ============================================================
+# CxxWrap raw C++ types submodule
+#
+# The wrapped C++ module is exposed as `RDKit.Cxx`. The library is found
+# via the JLRDKIT_LIB_PATH env var, falling back to jlRDKit_jll (when it
+# exists in Phase 4).
+# ============================================================
+module Cxx
+    using CxxWrap
+
+    function _find_lib()
+        lib_path = get(ENV, "JLRDKIT_LIB_PATH", "")
+        if isempty(lib_path)
+            # Lazily load jlRDKit_jll if it is installed (Phase 4). `import`
+            # is not allowed inside a function, so resolve via the package
+            # machinery.
+            pkg = Base.identify_package("jlRDKit_jll")
+            if pkg !== nothing
+                jll = Base.require(Cxx, pkg)
+                lib_path = jll.libjlRDKit
+            else
+                error("jlRDKit library not found. Set JLRDKIT_LIB_PATH or install jlRDKit_jll.")
+            end
+        end
+        return lib_path
+    end
+
+    @wrapmodule(_find_lib)
+
+    function __init__()
+        @initcxx
     end
 end
 
-# Layer 1: Raw ccall bindings for RDKit CFFI
-include("ctypes.jl")
-
-# Layer 2: Core types and API macros
+# ============================================================
+# Julian wrapper layer
+# ============================================================
 include("types.jl")
-include("api.jl")
-
-# Layer 3: High-level Julia API
 include("io.jl")
-include("drawing.jl")
-include("calculators.jl")
-include("standardization.jl")
-include("coordinates.jl")
-include("modification.jl")
-include("substructure.jl")
+include("atoms.jl")
 include("properties.jl")
-include("png.jl")
-include("chirality.jl")
-include("logging.jl")
+include("fingerprints.jl")
+include("drawing.jl")
 
-# Export public API
-export # Types
-       Mol, Reaction,
-       # I/O
-       get_mol, get_qmol, get_rxn,
-       get_smiles, get_smarts, get_cxsmiles, get_cxsmarts,
-       get_molblock, get_v3kmolblock, get_v2kmolblock,
-       get_json, get_inchi, get_inchi_for_molblock, get_inchikey_for_inchi,
-       get_mol_frags,
-       # Drawing
-       get_svg, get_rxn_svg,
-       # Calculators
-       get_morgan_fp, get_rdkit_fp, get_pattern_fp,
-       get_atom_pair_fp, get_topological_torsion_fp, get_maccs_fp,
-       get_morgan_fp_as_bytes, get_rdkit_fp_as_bytes, get_pattern_fp_as_bytes,
-       get_atom_pair_fp_as_bytes, get_topological_torsion_fp_as_bytes, get_maccs_fp_as_bytes,
-       get_descriptors,
-       # Standardization
-       cleanup, normalize, neutralize, reionize,
-       canonical_tautomer, charge_parent, fragment_parent,
-       # Coordinates
-       prefer_coordgen, set_2d_coords, set_2d_coords_aligned, set_3d_coords, has_coords,
-       # Modification
-       add_hs, remove_all_hs, remove_hs,
-       # Substructure
-       get_substruct_match, get_substruct_matches,
-       # Properties
-       has_prop, get_prop, get_prop_list, set_prop!, clear_prop!, keep_props,
-       # PNG
-       add_mol_to_png_blob, get_mol_from_png_blob, get_mols_from_png_blob,
-       # Chirality
-       use_legacy_stereo_perception, allow_non_tetrahedral_chirality,
-       # Logging & Utils
-       enable_logging, disable_logging, enable_logger, disable_logger,
-       set_log_tee, set_log_capture, get_log_buffer, clear_log_buffer, destroy_log_handle,
-       version
+# ============================================================
+# Exports
+# ============================================================
+export RWMol, ROMol, Atom, Bond
+export smiles_to_mol, molblock_to_mol
+export to_smiles, to_molblock
+export atoms, bonds
+export symbol, atomic_num, idx, order
+export begin_atom_idx, end_atom_idx
+export num_atoms, num_bonds, num_heavy_atoms
+export morgan_fingerprint, rdkit_fingerprint
+export to_svg
 
+# ============================================================
+# Runtime initialisation
+#
+# Once the C++ submodule has loaded, the wrapped types `Cxx.RWMol` /
+# `Cxx.ROMol` exist and we can bind the user-facing `RWMol` / `ROMol` aliases
+# to their concrete parametrised shared-pointer types. These are used for
+# display and documentation (dispatch in the Julian API uses the statically
+# known `SharedPtrAllocated`, see types.jl).
+# ============================================================
 function __init__()
-    _try_init_cxx()
+    # Bind the user-facing molecule type aliases now that the C++ module has
+    # loaded and registered its types. WrapIt names the wrapped C++ types with
+    # their fully-qualified namespace (`RDKit!RWMol`), accessed via
+    # `getproperty`. These aliases are for display/documentation; dispatch in
+    # the Julian API uses the statically-known `SharedPtrAllocated` (types.jl).
+    try
+        cxx_rwmol = getproperty(Cxx, Symbol("RDKit!RWMol"))
+        cxx_romol = getproperty(Cxx, Symbol("RDKit!ROMol"))
+        @eval RDKit begin
+            const RWMol = SharedPtrAllocated{$cxx_rwmol}
+            const ROMol = SharedPtrAllocated{$cxx_romol}
+        end
+    catch err
+        @warn "Could not bind RDKit molecule type aliases" exception=err
+    end
+    return nothing
 end
 
-end # module
+end # module RDKit
