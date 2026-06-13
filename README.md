@@ -3,132 +3,113 @@
 [![CI](https://github.com/zhangfan/RDKit.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/zhangfan/RDKit.jl/actions/workflows/CI.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Julia wrapper for [RDKit](https://www.rdkit.org/) cheminformatics library, providing full coverage of the CFFI API (72 functions from RDKit 2026.03) through Clang.jl auto-generated bindings.
+Julia bindings for the [RDKit](https://www.rdkit.org/) cheminformatics library,
+built on [CxxWrap.jl](https://github.com/JuliaInterop/CxxWrap.jl). RDKit.jl
+exposes a small, idiomatic Julian API over RDKit's native C++ classes — molecule
+I/O, atom/bond traversal, fingerprints, and 2D depiction — with fully GC-managed
+memory and no manual `free_ptr` calls.
 
-## Features
-
-- **Molecule I/O** — Parse from SMILES/SMARTS/MolBlock, serialize to SMILES, SMARTS, CXSMILES, MolBlock (V2000/V3000), JSON, InChI, InChIKey
-- **Reaction I/O** — Parse reactions from SMARTS, serialize to reaction SVG
-- **6 Fingerprint Types** — Morgan, RDKit, Pattern, Atom Pair, Topological Torsion, MACCS keys (string and byte forms)
-- **Molecular Descriptors** — Exact MW, AMW, LogP, TPSA, HBA, HBD, NumAtoms, NumHeavyAtoms, NumRotatableBonds, etc.
-- **Substructure Search** — Single match and all-matches search with atom/bond mapping
-- **Molecule Drawing** — SVG depiction for molecules and reactions, with substructure highlighting
-- **Molecule Standardization** — Cleanup, normalize, neutralize, reionize, canonical tautomer, charge/fragment parent
-- **2D/3D Coordinates** — Coordinate generation with CoordGen support and template alignment
-- **Hydrogen Management** — Add/remove explicit hydrogens
-- **Property CRUD** — Key-value metadata on molecules (set, get, list, clear, keep)
-- **PNG Metadata** — Embed and extract molecule data in PNG images
-- **Chirality Control** — Legacy stereo perception and non-tetrahedral chirality toggles
-- **Logging** — Enable/disable RDKit logging, capture logs to buffer or tee to file
-
-## Architecture
-
-Three-layer design with automatic memory management:
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│  Layer 3: High-level Julia API (10 files)                    │
-│  io.jl · drawing.jl · calculators.jl · standardization.jl   │
-│  coordinates.jl · modification.jl · substructure.jl         │
-│  properties.jl · png.jl · chirality.jl · logging.jl         │
-├──────────────────────────────────────────────────────────────┤
-│  Layer 2: Core types + API macros                            │
-│  types.jl — Mol/Reaction structs with GC finalizers          │
-│  api.jl   — @ccall_string / @ccall_bytes / @ccall_mutate!   │
-├──────────────────────────────────────────────────────────────┤
-│  Layer 1: Raw C bindings (ctypes.jl)                         │
-│  Clang.jl auto-generated @ccall declarations → librdkitcffi  │
-└──────────────────────────────────────────────────────────────┘
-```
-
-| Design Decision | Detail |
-|----------------|--------|
-| Molecule storage | Opaque serialized binary blob (`Cstring` + `Csize_t`) |
-| Memory management | Julia GC finalizers call `free_ptr` automatically |
-| Parameter passing | `Dict{String,Any}` → JSON string, matching RDKit CFFI convention |
-| Mutation model | Standardization/coordinate/hydrogen functions modify `Mol` in-place |
+> **Status:** pre-registration, local-development. The package is **not yet on
+> the General registry**, so `Pkg.add("RDKit")` will not work yet. See
+> [Installation](#installation) for the local build path. A `jlRDKit_jll`
+> artifact (Phase 4) will remove the manual `JLRDKIT_LIB_PATH` step.
 
 ## Quick Start
 
 ```julia
 using RDKit
 
-# --- Molecule I/O ---
+mol = smiles_to_mol("c1ccccc1")        # benzene
+num_atoms(mol)                          # 6
+to_smiles(mol)                          # "c1ccccc1"
 
-mol = get_mol("c1ccccc1O")          # phenol from SMILES
-smiles = get_smiles(mol)            # → "Oc1ccccc1"
-molblock = get_molblock(mol)        # → V3000 MolBlock
-inchi = get_inchi(mol)              # → InChI string
-json_str = get_json(mol)            # → JSON representation
+for atom in atoms(mol)
+    println("$(symbol(atom)) (Z=$(atomic_num(atom)))")
+end
+# C (Z=6)
+# C (Z=6)
+# ...
 
-# --- Molecular Descriptors ---
-
-desc = get_descriptors(mol)
-println(desc["exactmw"])            # 94.041864818
-println(desc["tpsa"])               # topological polar surface area
-
-# --- Fingerprints ---
-
-morgan = get_morgan_fp(mol, Dict("radius" => 2, "nBits" => 2048))
-morgan_bytes = get_morgan_fp_as_bytes(mol, Dict("radius" => 2))
-
-# --- Substructure Search ---
-
-query = get_qmol("c1ccccc1")                          # benzene query
-match = get_substruct_match(mol, query)                # first match
-matches = get_substruct_matches(mol, query)            # all matches
-
-# --- Molecule Drawing ---
-
-svg = get_svg(mol)                                      # SVG string
-
-# --- Standardization ---
-
-cleanup(mol)                  # in-place cleanup
-neutralize(mol)               # in-place neutralization
-canonical_tautomer(mol)       # in-place tautomer canonicalization
-
-# --- Coordinates ---
-
-set_2d_coords(mol)            # generate 2D coordinates
-set_3d_coords(mol, 42)        # generate 3D coordinates (seed=42)
-has_coords(mol)               # check coordinate presence
-
-# --- Hydrogen Management ---
-
-add_hs(mol)                   # add explicit hydrogens (in-place)
-remove_hs(mol)                # remove explicit hydrogens (in-place)
-
-# --- Properties ---
-
-set_prop!(mol, "name", "phenol")
-get_prop(mol, "name")         # → "phenol"
-has_prop(mol, "name")         # → true
-clear_prop!(mol, "name")
-
-# --- Reactions ---
-
-rxn = get_rxn("Cc1ccccc1>>Cc1ccc(Br)cc1")
-rxn_svg = get_rxn_svg(rxn)
-
-# --- Version ---
-
-version()                     # RDKit version string
+fp = morgan_fingerprint(mol; radius=2, nbits=2048)   # 256 raw bytes
+svg = to_svg(mol; width=300, height=300)             # SVG depiction string
 ```
 
-## Comparison with RDKitMinimalLib.jl
+## Installation
 
-| Feature | RDKitMinimalLib.jl | RDKit.jl |
-|---------|--------------------|----------|
-| RDKit version | 2022.09 | 2026.03 |
-| CFFI function coverage | 45 / 47 | 72 / 72 |
-| Binding generation | Hand-written ccall | Clang.jl auto-generated |
-| Julia minimum | 1.6 | 1.10 |
-| Property CRUD | ❌ | ✅ |
-| PNG metadata embedding | ❌ | ✅ |
-| Chirality control | ❌ | ✅ |
-| Logging control | ❌ | ✅ |
-| Automatic memory management | Manual | GC finalizers |
+RDKit.jl is currently used from a local checkout and needs a built
+`libjlRDKit.so` (the CxxWrap wrapper library). It is **not** registered yet, so
+do not use `Pkg.add("RDKit")`.
+
+1. **Build `libjlRDKit.so`** from the companion `jlRDKit` project (CxxWrap +
+   WrapIt over RDKit's C++ headers). This produces, e.g.,
+   `../jlRDKit/build/lib/libjlRDKit.so`.
+
+2. **Point `JLRDKIT_LIB_PATH` at it** and use the package from this checkout:
+
+   ```bash
+   export JLRDKIT_LIB_PATH=/path/to/jlRDKit/build/lib/libjlRDKit.so
+   julia --project -e 'using RDKit; println(num_atoms(smiles_to_mol("c1ccccc1")))'
+   # 6
+   ```
+
+No external `LD_LIBRARY_PATH` is required: at load time RDKit.jl resolves the
+RDKit, boost, and JlCxx shared libraries transitively (pushing their lib dirs
+onto `Base.DL_LOAD_PATH` and preloading boost with `RTLD_GLOBAL`). The `RDKit_jll`
+and `CxxWrap` Julia packages supply the RDKit binaries and the JlCxx runtime.
+
+Once `jlRDKit_jll` is published (planned Phase 4), the `JLRDKIT_LIB_PATH` step
+disappears and a plain `using RDKit` resolves everything via JLL artifacts.
+
+## Architecture
+
+RDKit.jl is a three-layer CxxWrap design:
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Layer 3 — Julian API (src/*.jl)                             │
+│  smiles_to_mol · to_smiles · atoms · bonds · num_atoms …     │
+│  morgan_fingerprint · rdkit_fingerprint · to_svg             │
+│  Idiomatic Julia signatures; GC-safe Atom/Bond wrappers.     │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 2 — CxxWrap raw C++ module: RDKit.Cxx                 │
+│  @wrapmodule over libjlRDKit.so (generated by WrapIt).       │
+│  Exposes the wrapped C++ classes/functions directly.         │
+├──────────────────────────────────────────────────────────────┤
+│  Layer 1 — jlRDKit (companion C++ project)                   │
+│  Thin CxxWrap shims + WrapIt-generated bindings over the     │
+│  RDKit C++ headers (RDKitGraphMol, SmilesParse, …).          │
+└──────────────────────────────────────────────────────────────┘
+```
+
+| Layer | What it is | Where |
+|-------|-----------|-------|
+| 1 — RDKit C++ | The upstream cheminformatics library | `RDKit_jll` artifacts |
+| 1 — jlRDKit | CxxWrap shims + WrapIt bindings producing `libjlRDKit.so` | companion `jlRDKit/` project |
+| 2 — `RDKit.Cxx` | The `@wrapmodule` submodule, raw C++ types/functions | `src/RDKit.jl` |
+| 3 — Julian API | Idiomatic Julia functions used by application code | `src/io.jl`, `atoms.jl`, `properties.jl`, `fingerprints.jl`, `drawing.jl`, `types.jl` |
+
+**Memory management.** Molecules are held in CxxWrap `std::shared_ptr`s
+(`SharedPtrAllocated`) and reclaimed by Julia's GC. `Atom`/`Bond` wrappers each
+hold a reference to their parent molecule, so the molecule stays alive as long
+as any of its atoms or bonds are reachable — no dangling-pointer hazard when
+traversing.
+
+**Raw C++ access.** Power users can drop down to the wrapped C++ directly via
+`RDKit.Cxx`. Because CxxWrap wraps the C++ methods as-is, you dereference the
+shared pointer with `[]`:
+
+```julia
+RDKit.Cxx.getNumAtoms(mol[])     # call the wrapped C++ method directly
+RDKit.Cxx.getSymbol(atom.ptr)    # atom.ptr is the dereferenced C++ handle
+```
+
+## Requirements
+
+- **Julia** ≥ 1.10
+- **CxxWrap** 0.17
+- **RDKit_jll** 2026.3 (provides the RDKit shared libraries + boost)
+- A built **`libjlRDKit.so`** (from the companion `jlRDKit` project), pointed at
+  by `JLRDKIT_LIB_PATH` until `jlRDKit_jll` exists
 
 ## API Reference
 
@@ -136,150 +117,86 @@ version()                     # RDKit version string
 
 | Type | Description |
 |------|-------------|
-| `Mol` | Serialized molecule with GC-managed memory |
-| `Reaction` | Serialized reaction with GC-managed memory |
+| `RWMol` | Mutable molecule (`SharedPtrAllocated{…RDKit.RWMol}`) |
+| `ROMol` | Read-only molecule (`SharedPtrAllocated{…RDKit.ROMol}`) |
+| `Atom` | GC-safe reference to an atom (holds its parent molecule) |
+| `Bond` | GC-safe reference to a bond (holds its parent molecule) |
 
 ### I/O
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `get_mol` | `(str [, details]) → Mol?` | Parse molecule from SMILES/SMARTS/MolBlock |
-| `get_qmol` | `(str [, details]) → Mol?` | Parse query molecule for substructure search |
-| `get_rxn` | `(str [, details]) → Reaction?` | Parse reaction from SMARTS |
-| `get_smiles` | `(mol [, details]) → String` | Canonical SMILES |
-| `get_smarts` | `(mol [, details]) → String` | SMARTS |
-| `get_cxsmiles` | `(mol [, details]) → String` | CXSMILES (with extended stereo) |
-| `get_cxsmarts` | `(mol [, details]) → String` | CXSMARTS |
-| `get_molblock` | `(mol [, details]) → String` | V3000 MolBlock |
-| `get_v3kmolblock` | `(mol [, details]) → String` | Force V3000 |
-| `get_v2kmolblock` | `(mol [, details]) → String` | Force V2000 |
-| `get_json` | `(mol [, details]) → String` | JSON serialization |
-| `get_inchi` | `(mol [, details]) → String` | InChI |
-| `get_inchi_for_molblock` | `(molblock [, details]) → String` | InChI from MolBlock |
-| `get_inchikey_for_inchi` | `(inchi) → String` | InChIKey from InChI |
-| `get_mol_frags` | `(mol [, details]) → Vector{Mol}` | Split into fragments |
+| `smiles_to_mol` | `(smiles) → RWMol` | Parse a SMILES string |
+| `molblock_to_mol` | `(molblock) → RWMol` | Parse a V2000/V3000 MolBlock |
+| `to_smiles` | `(mol) → String` | Canonical SMILES |
+| `to_molblock` | `(mol) → String` | V2000 MolBlock |
 
-### Calculators
+### Atoms, Bonds, Properties
 
 | Function | Description |
 |----------|-------------|
-| `get_morgan_fp` / `get_morgan_fp_as_bytes` | Morgan (circular) fingerprint |
-| `get_rdkit_fp` / `get_rdkit_fp_as_bytes` | RDKit topological fingerprint |
-| `get_pattern_fp` / `get_pattern_fp_as_bytes` | Pattern fingerprint (for substructure screening) |
-| `get_atom_pair_fp` / `get_atom_pair_fp_as_bytes` | Atom pair fingerprint |
-| `get_topological_torsion_fp` / `get_topological_torsion_fp_as_bytes` | Topological torsion fingerprint |
-| `get_maccs_fp` / `get_maccs_fp_as_bytes` | MACCS keys (166 bits) |
-| `get_descriptors` | Dict with `exactmw`, `amw`, `logp`, `tpsa`, `hba`, `hbd`, etc. |
+| `atoms(mol)` | `Vector{Atom}` of every atom |
+| `bonds(mol)` | `Vector{Bond}` of every bond |
+| `symbol(atom)` | Element symbol (`"C"`, `"O"`, …) |
+| `atomic_num(atom)` | Atomic number |
+| `idx(atom)` | Atom index within its molecule |
+| `order(bond)` | Bond order as a double (1.0/2.0/1.5/…) |
+| `begin_atom_idx(bond)` / `end_atom_idx(bond)` | Bond endpoint indices |
+| `num_atoms(mol)` | Number of explicit atoms |
+| `num_bonds(mol)` | Number of bonds |
+| `num_heavy_atoms(mol)` | Number of heavy atoms |
 
-### Standardization & Modification
-
-| Function | Description |
-|----------|-------------|
-| `cleanup(mol)` | General cleanup |
-| `normalize(mol)` | Functional group normalization |
-| `neutralize(mol)` | Charge neutralization |
-| `reionize(mol)` | Re-ionization |
-| `canonical_tautomer(mol)` | Canonical tautomer |
-| `charge_parent(mol)` | Charge parent |
-| `fragment_parent(mol)` | Fragment parent (largest fragment) |
-| `add_hs(mol)` | Add explicit hydrogens |
-| `remove_all_hs(mol)` | Remove all explicit hydrogens |
-| `remove_hs(mol)` | Remove explicit hydrogens |
-
-### Coordinates & Drawing
+### Fingerprints
 
 | Function | Description |
 |----------|-------------|
-| `set_2d_coords(mol)` | Generate 2D coordinates |
-| `set_2d_coords_aligned(mol, template_mol [, details])` | 2D coordinates aligned to template |
-| `set_3d_coords(mol, seed)` | Generate 3D coordinates with random seed |
-| `has_coords(mol)` | Check coordinate presence (0=none, 1=2D, 2=3D) |
-| `prefer_coordgen(val)` | Prefer CoordGen over RDKit coord generator |
-| `get_svg(mol [, details])` | SVG depiction |
-| `get_rxn_svg(rxn [, details])` | Reaction SVG depiction |
+| `morgan_fingerprint(mol; radius=2, nbits=2048)` | Morgan (circular) FP, packed bytes (`nbits ÷ 8`) |
+| `rdkit_fingerprint(mol; min_path=1, max_path=7)` | RDKit path-based FP, packed bytes |
 
-### Substructure, Properties & PNG
+Fingerprints are returned as `Vector{UInt8}` of raw packed bits and are
+deterministic across independent calls on identical input (load-bearing for
+caching / ML dedup).
+
+### Drawing
 
 | Function | Description |
 |----------|-------------|
-| `get_substruct_match(mol, query [, details])` | First substructure match |
-| `get_substruct_matches(mol, query [, details])` | All substructure matches |
-| `set_prop!(mol, key, val)` | Set molecule property |
-| `get_prop(mol, key)` | Get molecule property |
-| `has_prop(mol, key)` | Check property existence |
-| `get_prop_list(mol)` | List all property keys |
-| `clear_prop!(mol, key)` | Delete a property |
-| `keep_props(mol, keys)` | Keep only specified properties |
-| `add_mol_to_png_blob(mol, png_bytes)` | Embed molecule in PNG |
-| `get_mol_from_png_blob(png_bytes)` | Extract molecule from PNG |
-| `get_mols_from_png_blob(png_bytes)` | Extract all molecules from PNG |
-
-## Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| [RDKit_jll](https://github.com/JuliaBinaryWrappers/RDKit_jll.jl) | ≥ 2026.3 | Pre-built RDKit binaries with CFFI support |
-| [JSON.jl](https://github.com/JuliaIO/JSON.jl) | ≥ 0.21 | Parameter serialization (`Dict` → JSON) |
-
-No local RDKit installation required — all binaries are provided via JLL artifacts.
+| `to_svg(mol; width=300, height=300)` | SVG depiction string (pixel dimensions flow through to the renderer) |
 
 ## Project Structure
 
 ```
 RDKit.jl/
 ├── src/
-│   ├── RDKit.jl              # Module definition, exports 61 public symbols
-│   ├── ctypes.jl             # Layer 1: Raw C bindings
-│   ├── types.jl              # Layer 2: Mol, Reaction structs
-│   ├── api.jl                # Layer 2: @ccall_string / @ccall_bytes / @ccall_mutate!
-│   ├── io.jl                 # Layer 3: Molecule/reaction I/O
-│   ├── drawing.jl            # Layer 3: SVG generation
-│   ├── calculators.jl        # Layer 3: Fingerprints & descriptors
-│   ├── standardization.jl    # Layer 3: Molecule standardization
-│   ├── coordinates.jl        # Layer 3: 2D/3D coordinates
-│   ├── modification.jl       # Layer 3: Hydrogen add/remove
-│   ├── substructure.jl       # Layer 3: Substructure matching
-│   ├── properties.jl         # Layer 3: Property CRUD
-│   ├── png.jl                # Layer 3: PNG metadata embedding
-│   ├── chirality.jl          # Layer 3: Chirality settings
-│   └── logging.jl            # Layer 3: Logging & version()
-├── gen/
-│   ├── generator.toml        # Clang.jl configuration
-│   ├── generate.jl           # Binding generation script
-│   └── prologue.jl           # Generated file header
+│   ├── RDKit.jl           # Module: load-path setup, Cxx submodule, exports
+│   ├── types.jl           # RWMol/ROMol/Atom/Bond (GC-safe wrappers)
+│   ├── io.jl              # smiles_to_mol / to_smiles / molblock I/O
+│   ├── atoms.jl           # atoms() / bonds() traversal
+│   ├── properties.jl      # symbol / atomic_num / num_atoms / num_bonds / …
+│   ├── fingerprints.jl    # morgan_fingerprint / rdkit_fingerprint
+│   └── drawing.jl         # to_svg
 ├── test/
-│   ├── runtests.jl           # Test runner
-│   └── test_*.jl             # 11 test files, ~55+ test cases
-├── docs/                     # Documentation (pending)
-├── Project.toml              # Package metadata
-└── .github/workflows/        # CI/CD automation
-    ├── CI.yml                # Julia 1.10 + latest, ubuntu + macOS
-    ├── TagBot.yml            # Automated releases
-    ├── CompatHelper.yml      # Dependency compat checking
-    └── JuliaFormatter.yml    # Code format enforcement
+│   ├── runtests.jl        # Test runner
+│   └── test_*.jl          # I/O, atoms, GC safety, fingerprints, drawing, exceptions
+└── Project.toml           # CxxWrap + RDKit_jll + Libdl
 ```
 
 ## Development
 
-### Regenerate C bindings
+### Run the tests
 
 ```bash
-cd gen/
-julia --project=.. generate.jl
+JLRDKIT_LIB_PATH=/path/to/jlRDKit/build/lib/libjlRDKit.so \
+  julia --project test/runtests.jl
 ```
 
-### Run tests
+### Rebuild the wrapper library
 
-```bash
-julia --project -e 'using Pkg; Pkg.test()'
-```
-
-### Format code
-
-```bash
-julia -e 'using JuliaFormatter; format("src/")'
-```
+`libjlRDKit.so` lives in the companion `jlRDKit/` project (CxxWrap shims +
+WrapIt). Rebuild it there after changing the wrapped C++ surface, then re-run
+the Julia tests above.
 
 ## License
 
-[MIT License](LICENSE). RDKit itself is distributed under the BSD-3-Clause license.
+[MIT License](LICENSE). RDKit itself is distributed under the BSD-3-Clause
+license.
