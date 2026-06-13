@@ -1,23 +1,13 @@
 name = "RDKit"
 uuid = "9bf5b34f-2865-4a70-bbdc-e2fb4a10429d"
 authors = ["Zhang Fan"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 CxxWrap = "1f15a43c-97ca-5a2a-ae31-89f07a497df4"
-JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"
-Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 RDKit_jll = "03d1d220-30e6-562a-9e1a-3062d7b56d75"
 
 [compat]
 CxxWrap = "0.17"
-JSON = "0.21, 1"
 RDKit_jll = "2026.3"
 julia = ">= 1.10"
-
-[extras]
-Aqua = "4c88cf16-eb10-579e-8560-4a9242c79595"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
-
-[targets]
-test = ["Aqua", "Test"]
