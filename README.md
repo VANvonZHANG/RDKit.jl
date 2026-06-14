@@ -150,7 +150,7 @@ RDKit.Cxx.getSymbol(atom.ptr)    # atom.ptr is the dereferenced C++ handle
 
 | Function | Description |
 |----------|-------------|
-| `morgan_fingerprint(mol; radius=2, nbits=2048)` | Morgan (circular) FP, packed bytes (`nbits ÷ 8`) |
+| `morgan_fingerprint(mol; radius=2, nbits=2048)` | Morgan (circular) FP, packed bytes (`ceil(nbits / 8)`) |
 | `rdkit_fingerprint(mol; min_path=1, max_path=7)` | RDKit path-based FP, packed bytes |
 
 Fingerprints are returned as `Vector{UInt8}` of raw packed bits and are
