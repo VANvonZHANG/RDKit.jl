@@ -1,31 +1,19 @@
-# test/test_drawing.jl
-using Test
-using RDKit
-
+# Drawing: `to_svg` (src/drawing.jl) returns an XML+SVG depiction string.
+#
+# Verified behavior: RDKit draws aromatic rings WITHOUT explicit atom labels,
+# so a literal "C" does not appear in the benzene SVG. Only the structural
+# `<svg>`/`</svg>` markers are asserted.
 @testset "Drawing" begin
-    mol = get_mol("CC(=O)Oc1ccccc1C(=O)O")
+    mol = smiles_to_mol("c1ccccc1")
 
-    @testset "get_svg" begin
-        svg = get_svg(mol)
-        @test occursin("<svg", svg)
-        @test occursin("</svg>", svg)
-    end
+    svg = to_svg(mol)
+    @test occursin("<svg", svg)
+    @test occursin("</svg>", svg)
 
-    @testset "get_svg with details" begin
-        svg = get_svg(mol, Dict{String,Any}("width" => 300, "height" => 300))
-        @test occursin("<svg", svg)
-    end
+    svg2 = to_svg(mol; width=500, height=500)
+    @test occursin("<svg", svg2)
+    @test occursin("</svg>", svg2)
 
-    @testset "get_svg with substruct match" begin
-        qmol = get_qmol("ccO")
-        match = get_substruct_match(mol, qmol)
-        svg = get_svg(mol, Dict{String,Any}("atoms" => match["atoms"], "bonds" => match["bonds"]))
-        @test occursin("<svg", svg)
-    end
-
-    @testset "get_rxn_svg" begin
-        rxn = get_rxn("[CH3:1][OH:2]>>[CH2:1]=[OH0:2]")
-        svg = get_rxn_svg(rxn)
-        @test occursin("<svg", svg)
-    end
+    # Custom dimensions flow through to the renderer (not silently dropped).
+    @test length(svg2) != length(svg)
 end

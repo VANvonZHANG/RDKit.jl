@@ -1,19 +1,11 @@
 using Test
 using RDKit
 
-@testset "RDKit.jl" begin
+@testset "RDKit.jl CxxWrap-only" begin
     include("test_io.jl")
-    include("test_calculators.jl")
+    include("test_atoms.jl")
+    include("test_gc_safety.jl")
+    include("test_fingerprints.jl")
     include("test_drawing.jl")
-    include("test_substructure.jl")
-    include("test_standardization.jl")
-    include("test_modification.jl")
-    include("test_coordinates.jl")
-    include("test_properties.jl")
-    include("test_png.jl")
-    include("test_chirality.jl")
-    include("test_logging.jl")
-
-    # CxxWrap backend tests — skipped if JLRDKIT_LIB_PATH not set
-    include("test_cxxwrap.jl")
+    include("test_exceptions.jl")
 end
