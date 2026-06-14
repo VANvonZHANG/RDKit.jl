@@ -1,76 +1,80 @@
-# src/properties.jl
-# Layer 3: Molecule property CRUD
+# Atom, Bond and Molecule property accessors.
+#
+# The WrapIt-generated accessors (`getSymbol`, `getAtomicNum`, ...) operate on
+# the dereferenced C++ object. `Atom.ptr` / `Bond.ptr` are already the
+# dereferenced pointer produced in `atoms.jl`, so the accessor can be called
+# directly on `atom.ptr`. The molecule accessor shims (`getNumAtoms`, ...)
+# take `const ROMol&`, so the SharedPtrAllocated is dereferenced with `mol[]`
+# (mirrors jlRDKit_test: `getNumAtoms(mol[])`).
+
+# ---- Atom properties ----
 
 """
-    has_prop(mol, key) -> Bool
+    symbol(atom::Atom) -> String
 
-Check if the molecule has a property with the given key.
+Return the element symbol of `atom` (e.g. `"C"`, `"O"`).
 """
-function has_prop(mol::Mol, key::AbstractString)::Bool
-    ccall((:has_prop, librdkitcffi), Cshort,
-          (Cstring, Csize_t, Cstring), mol.pkl[], mol.pkl_size[], key) != 0
-end
+symbol(atom::Atom) = Cxx.getSymbol(atom.ptr)
 
 """
-    get_prop(mol, key) -> String
+    atomic_num(atom::Atom) -> Int
 
-Get the value of a molecule property.
+Return the atomic number of `atom`.
 """
-function get_prop(mol::Mol, key::AbstractString)::String
-    val = ccall((:get_prop, librdkitcffi), Cstring,
-                (Cstring, Csize_t, Cstring), mol.pkl[], mol.pkl_size[], key)
-    return unsafe_string_and_free(val)
-end
+atomic_num(atom::Atom) = Int(Cxx.getAtomicNum(atom.ptr))
 
 """
-    get_prop_list(mol; include_private=false, include_computed=false) -> Vector{String}
+    idx(atom::Atom) -> Int
 
-Get the list of property keys on the molecule.
+Return the index of `atom` within its molecule.
 """
-function get_prop_list(mol::Mol; include_private::Bool=false, include_computed::Bool=false)::Vector{String}
-    ptr = ccall((:get_prop_list, librdkitcffi), Ptr{Cstring},
-                (Cstring, Csize_t, Cshort, Cshort),
-                mol.pkl[], mol.pkl_size[], Cshort(include_private), Cshort(include_computed))
-    result = String[]
-    i = 1
-    while true
-        p = unsafe_load(ptr, i)
-        p == C_NULL && break
-        push!(result, unsafe_string(p))
-        i += 1
-    end
-    ccall((:free_ptr, librdkitcffi), Cvoid, (Ptr{Cvoid},), ptr)
-    return result
-end
+idx(atom::Atom) = Int(Cxx.getIdx(atom.ptr))
+
+# ---- Bond properties ----
 
 """
-    set_prop!(mol, key, value; computed=false)
+    order(bond::Bond) -> Float64
 
-Set a property on the molecule (in-place).
+Return the bond order of `bond` as a double (1.0 for single, 2.0 for double,
+1.5 for aromatic, ...).
 """
-function set_prop!(mol::Mol, key::AbstractString, value::AbstractString; computed::Bool=false)
-    ccall((:set_prop, librdkitcffi), Cvoid,
-          (Ref{Cstring}, Ref{Csize_t}, Cstring, Cstring, Cshort),
-          mol.pkl, mol.pkl_size, key, value, Cshort(computed))
-end
+order(bond::Bond) = Cxx.getBondTypeAsDouble(bond.ptr)
 
 """
-    clear_prop!(mol, key)
+    begin_atom_idx(bond::Bond) -> Int
 
-Remove a property from the molecule (in-place).
+Return the index of the begin atom of `bond`.
 """
-function clear_prop!(mol::Mol, key::AbstractString)
-    ccall((:clear_prop, librdkitcffi), Cshort,
-          (Ref{Cstring}, Ref{Csize_t}, Cstring), mol.pkl, mol.pkl_size, key)
-end
+begin_atom_idx(bond::Bond) = Int(Cxx.getBeginAtomIdx(bond.ptr))
 
 """
-    keep_props(mol, keys)
+    end_atom_idx(bond::Bond) -> Int
 
-Keep only the specified properties on the molecule, removing all others (in-place).
+Return the index of the end atom of `bond`.
 """
-function keep_props(mol::Mol, keys::Vector{String})
-    details_json = JSON.json(Dict{String,Any}("props" => keys))
-    ccall((:keep_props, librdkitcffi), Cvoid,
-          (Ref{Cstring}, Ref{Csize_t}, Cstring), mol.pkl, mol.pkl_size, details_json)
-end
+end_atom_idx(bond::Bond) = Int(Cxx.getEndAtomIdx(bond.ptr))
+
+# ---- Molecule properties ----
+
+"""
+    num_atoms(mol::RWMol) -> Int
+
+Return the number of explicit atoms in `mol` (heavy atoms plus any explicit
+hydrogens; does NOT include implicit hydrogens). For benzene `c1ccccc1` this is
+6, not 12. Use `num_heavy_atoms` to count only heavy atoms.
+"""
+num_atoms(mol::SharedPtrAllocated) = Int(Cxx.getNumAtoms(mol[]))
+
+"""
+    num_bonds(mol::RWMol) -> Int
+
+Return the number of bonds in `mol`.
+"""
+num_bonds(mol::SharedPtrAllocated) = Int(Cxx.getNumBonds(mol[]))
+
+"""
+    num_heavy_atoms(mol::RWMol) -> Int
+
+Return the number of heavy atoms in `mol` (excluding implicit hydrogens).
+"""
+num_heavy_atoms(mol::SharedPtrAllocated) = Int(Cxx.getNumHeavyAtoms(mol[]))

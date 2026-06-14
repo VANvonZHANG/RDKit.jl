@@ -1,27 +1,15 @@
-# src/drawing.jl
+# Molecule depiction.
+#
+# The `mol_to_svg` shim takes the SharedPtrAllocated<RWMol> directly (CxxWrap
+# converts to `const std::shared_ptr<RWMol>&`) and returns a CxxWrap
+# `StdStringAllocated`; we convert it to a plain Julia `String`.
 
 """
-    get_svg(mol[, details]) -> String
+    to_svg(mol::RWMol; width::Integer=300, height::Integer=300) -> String
 
-Generate an SVG depiction of the molecule.
+Generate an SVG (wrapped in a small XML prologue) depiction of `mol` with the
+requested pixel dimensions.
 """
-function get_svg(mol::Mol, details::Union{Dict{String,Any},Nothing}=nothing)::String
-    details_json = jsonify_details(details)
-    val = ccall((:get_svg, librdkitcffi), Cstring,
-                (Cstring, Csize_t, Cstring),
-                mol.pkl[], mol.pkl_size[], details_json)
-    return unsafe_string_and_free(val)
-end
-
-"""
-    get_rxn_svg(rxn[, details]) -> String
-
-Generate an SVG depiction of a reaction.
-"""
-function get_rxn_svg(rxn::Reaction, details::Union{Dict{String,Any},Nothing}=nothing)::String
-    details_json = jsonify_details(details)
-    val = ccall((:get_rxn_svg, librdkitcffi), Cstring,
-                (Cstring, Csize_t, Cstring),
-                rxn.pkl[], rxn.pkl_size[], details_json)
-    return unsafe_string_and_free(val)
+function to_svg(mol::SharedPtrAllocated; width::Integer=300, height::Integer=300)
+    return String(Cxx.mol_to_svg(mol, Int(width), Int(height)))
 end
